@@ -73,6 +73,36 @@ class ExpenseSerializer(serializers.ModelSerializer):
         fields = ["id", "project", "amount", "description", "created_at"]
 
 
+class ProjectBalanceSerializer(serializers.ModelSerializer):
+    total_expenses = serializers.SerializerMethodField()
+    remaining_budget = serializers.SerializerMethodField()
+    expense_count = serializers.SerializerMethodField()
+    latest_expenses = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Project
+        fields = ["id", "name", "budget", "total_expenses", "remaining_budget", 
+                 "expense_count", "latest_expenses", "created_at"]
+    
+    def get_total_expenses(self, obj):
+        """Calculate total expenses for this project"""
+        total = sum(expense.amount for expense in obj.expenses.all())
+        return total
+    
+    def get_remaining_budget(self, obj):
+        """Calculate remaining budget (current budget field already accounts for expenses)"""
+        return obj.budget
+    
+    def get_expense_count(self, obj):
+        """Get total number of expenses for this project"""
+        return obj.expenses.count()
+    
+    def get_latest_expenses(self, obj):
+        """Get latest 3 expenses for this project"""
+        latest_expenses = obj.expenses.order_by('-created_at')[:3]
+        return ExpenseSerializer(latest_expenses, many=True).data
+
+
 # from django.contrib.auth import get_user_model
 # from rest_framework import serializers
 # from django.contrib.auth.hashers import make_password

@@ -125,3 +125,42 @@ class AddExpenseView(APIView):
             return Response({"error": "Insufficient project budget"}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProjectBalanceView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """Get detailed balance information for all user's projects"""
+        try:
+            projects = Project.objects.filter(user=request.user).prefetch_related('expenses')
+            
+            if not projects.exists():
+                return Response({"message": "No projects found"}, status=status.HTTP_200_OK)
+            
+            # Import here to avoid circular import
+            from .serializers import ProjectBalanceSerializer
+            serializer = ProjectBalanceSerializer(projects, many=True)
+            
+            # Calculate summary statistics
+            total_allocated = sum(project.budget for project in projects)
+            total_original_budget = sum(
+                project.budget + sum(expense.amount for expense in project.expenses.all()) 
+                for project in projects
+            )
+            total_spent = total_original_budget - total_allocated
+            
+            response_data = {
+                "projects": serializer.data,
+                "summary": {
+                    "total_projects": projects.count(),
+                    "total_original_budget": total_original_budget,
+                    "total_spent": total_spent,
+                    "total_remaining": total_allocated
+                }
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
